@@ -1,0 +1,5 @@
+{
+  "name": "CIPA Digital Dashboard",
+  "description": "Uma central de monitoramento para membros da CIPA, exibindo participantes ativos por turno e dicas de segurança dinâmicas geradas por IA.",
+  "requestFramePermissions": []
+}
