@@ -1,8 +1,8 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { SafetyTip } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Always initialize GoogleGenAI with the recommended pattern using the API_KEY from process.env
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getDailySafetyTip = async (): Promise<SafetyTip> => {
   try {
@@ -23,7 +23,9 @@ export const getDailySafetyTip = async (): Promise<SafetyTip> => {
       }
     });
 
-    return JSON.parse(response.text.trim()) as SafetyTip;
+    // Access the generated text directly from the response object property and trim it
+    const jsonStr = response.text.trim();
+    return JSON.parse(jsonStr) as SafetyTip;
   } catch (error) {
     console.error("Error fetching safety tip:", error);
     return {

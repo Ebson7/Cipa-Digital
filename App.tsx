@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MOCK_PARTICIPANTS, SHIFT_HOURS } from './constants';
 import { ShiftType, SafetyTip, Participant } from './types';
 import { getDailySafetyTip } from './services/geminiService';
@@ -14,6 +13,14 @@ const App: React.FC = () => {
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [autoRotateProgress, setAutoRotateProgress] = useState(0);
+  
+  const ROTATION_INTERVAL = 40000; // 40 seconds
+  const PROGRESS_INTERVAL = 100; // Update progress bar every 100ms
+  // Use any to avoid NodeJS namespace errors in browser-only environments
+  const timerRef = useRef<any>(null);
+  // Use any to avoid NodeJS namespace errors in browser-only environments
+  const progressTimerRef = useRef<any>(null);
 
   // Initialize participants from localStorage or mock data
   useEffect(() => {
@@ -49,6 +56,36 @@ const App: React.FC = () => {
     setCurrentTipIndex(0);
   }, []);
 
+  // Automatic Rotation Logic
+  const resetRotation = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    
+    setAutoRotateProgress(0);
+
+    if (tipsHistory.length > 1) {
+      const startTime = Date.now();
+      
+      progressTimerRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = (elapsed / ROTATION_INTERVAL) * 100;
+        setAutoRotateProgress(Math.min(progress, 100));
+      }, PROGRESS_INTERVAL);
+
+      timerRef.current = setInterval(() => {
+        setCurrentTipIndex(prev => (prev + 1) % tipsHistory.length);
+      }, ROTATION_INTERVAL);
+    }
+  }, [tipsHistory.length]);
+
+  useEffect(() => {
+    resetRotation();
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    };
+  }, [currentTipIndex, resetRotation]);
+
   useEffect(() => {
     const initialShift = calculateShift();
     setRealTimeShift(initialShift);
@@ -73,6 +110,14 @@ const App: React.FC = () => {
   ];
 
   const currentTip = tipsHistory[currentTipIndex];
+
+  const handleNextTip = () => {
+    setCurrentTipIndex(prev => (prev + 1) % tipsHistory.length);
+  };
+
+  const handlePrevTip = () => {
+    setCurrentTipIndex(prev => (prev - 1 + tipsHistory.length) % tipsHistory.length);
+  };
 
   return (
     <div className="min-h-screen bg-[#0f172a] p-4 sm:p-8 lg:p-10 flex flex-col gap-8 max-w-[1600px] mx-auto overflow-x-hidden relative">
@@ -134,21 +179,49 @@ const App: React.FC = () => {
       </main>
 
       <footer className="grid grid-cols-1 md:grid-cols-12 gap-6 lg:gap-10 items-stretch pt-8 border-t border-slate-800 mt-auto">
-        <div className="md:col-span-8 bg-slate-900/60 rounded-[2.5rem] p-8 sm:p-10 border border-slate-800/50 flex flex-col justify-center relative min-h-[250px]">
+        <div className="md:col-span-8 bg-slate-900/60 rounded-[2.5rem] p-8 sm:p-10 border border-slate-800/50 flex flex-col justify-center relative min-h-[250px] overflow-hidden">
+          {/* Progress bar for auto-rotation */}
+          <div className="absolute top-0 left-0 w-full h-1 bg-slate-800">
+            <div 
+              className="h-full bg-emerald-500 transition-all duration-100 ease-linear shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+              style={{ width: `${autoRotateProgress}%` }}
+            />
+          </div>
+
           <div className="flex justify-between items-start mb-6">
-            <span className="bg-emerald-500/10 text-emerald-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">Segurança do Trabalho</span>
+            <div className="flex flex-col">
+              <span className="bg-emerald-500/10 text-emerald-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-500/20 w-fit">
+                Segurança do Trabalho
+              </span>
+              <span className="text-[10px] text-slate-500 font-bold uppercase mt-2 px-1">
+                Rotação Automática: 40s
+              </span>
+            </div>
+            
             {tipsHistory.length > 1 && (
               <div className="flex gap-2">
-                <button onClick={() => setCurrentTipIndex(prev => (prev - 1 + tipsHistory.length) % tipsHistory.length)} className="p-2 hover:bg-emerald-500 hover:text-slate-950 rounded-full text-slate-400"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6"/></svg></button>
-                <button onClick={() => setCurrentTipIndex(prev => (prev + 1) % tipsHistory.length)} className="p-2 hover:bg-emerald-500 hover:text-slate-950 rounded-full text-slate-400"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg></button>
+                <button 
+                  onClick={handlePrevTip} 
+                  className="p-2 hover:bg-emerald-500 hover:text-slate-950 rounded-full text-slate-400 transition-all active:scale-90"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <button 
+                  onClick={handleNextTip} 
+                  className="p-2 hover:bg-emerald-500 hover:text-slate-950 rounded-full text-slate-400 transition-all active:scale-90"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
               </div>
             )}
           </div>
+          
           <div key={currentTipIndex} className="animate-in fade-in slide-in-from-right-6 duration-500">
             <h2 className="text-2xl sm:text-4xl font-black text-white mb-3 tracking-tight">{currentTip?.title || 'Carregando...'}</h2>
             <p className="text-base sm:text-xl text-slate-400 leading-relaxed font-medium max-w-3xl">{currentTip?.content}</p>
           </div>
         </div>
+
         <div className="md:col-span-4 bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-[2.5rem] p-10 flex flex-col justify-center items-center text-white shadow-2xl">
           <span className="text-xs font-black uppercase tracking-[0.3em] text-emerald-100 mb-2">Dias sem Acidentes</span>
           <span className="text-6xl sm:text-8xl font-black tabular-nums">452</span>
